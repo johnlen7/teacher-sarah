@@ -1,0 +1,13 @@
+python-telegram-bot==20.7
+aiohttp==3.9.1
+edge-tts==6.1.10
+language-tool-python==2.7.1
+python-dotenv==1.0.0
+pytest==8.2.2
+aioredis==2.0.1
+dataclasses==0.6
+openai-whisper==20231117
+flask==3.0.0
+openai-whisper
+torch
+torchaudio

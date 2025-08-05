@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  telegram-bot:
+    build: ./bot
+    container_name: english-teacher-bot
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+      - ./temp:/app/temp
+    depends_on:
+      - whisper-service
+    restart: unless-stopped
+    networks:
+      - bot-network
+
+  whisper-service:
+    build: ./whisper
+    container_name: whisper-transcription
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL}
+      - DEVICE=${WHISPER_DEVICE}
+    volumes:
+      - whisper-models:/root/.cache/whisper
+      - ./temp:/app/temp
+    ports:
+      - "5001:5001"
+    restart: unless-stopped
+    networks:
+      - bot-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+networks:
+  bot-network:
+    driver: bridge
+
+volumes:
+  whisper-models:
+  temp-audio:
