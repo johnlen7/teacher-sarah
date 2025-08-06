@@ -84,7 +84,7 @@ def check_services():
             print("⚠️ GPT4All Local: Não está rodando")
             print("💡 Inicie o GPT4All Server primeiro")
 
-async def start_bot():
+def start_bot():
     """Inicia o bot Sarah"""
     
     print(f"\n🤖 INICIANDO SARAH ENGLISH TEACHER BOT...")
@@ -93,7 +93,7 @@ async def start_bot():
     try:
         # Importar e inicializar o bot
         from bot.main import main
-        await main()
+        main()  # Chama direto, sem await
         
     except KeyboardInterrupt:
         print(f"\n👋 Bot encerrado pelo usuário")
@@ -136,6 +136,6 @@ if __name__ == "__main__":
     
     # Iniciar bot
     try:
-        asyncio.run(start_bot())
+        start_bot()
     except KeyboardInterrupt:
         print(f"\n👋 Tchau! Sarah está sempre pronta para ensinar! 🎓✨")

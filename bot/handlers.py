@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+import re
 from typing import Optional
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -19,6 +20,34 @@ class MessageHandler:
         self.deepseek = DeepSeekService()
         self.tts = TTSService()
         self.grammar = GrammarChecker()
+    
+    def _sanitize_markdown(self, text: str) -> str:
+        """Sanitiza markdown para evitar erros de parsing"""
+        if not text:
+            return ""
+        
+        # Remove caracteres problemáticos para markdown
+        # Escape caracteres especiais
+        text = text.replace('*', '\\*')
+        text = text.replace('_', '\\_')
+        text = text.replace('[', '\\[')
+        text = text.replace(']', '\\]')
+        text = text.replace('(', '\\(')
+        text = text.replace(')', '\\)')
+        text = text.replace('~', '\\~')
+        text = text.replace('`', '\\`')
+        text = text.replace('>', '\\>')
+        text = text.replace('#', '\\#')
+        text = text.replace('+', '\\+')
+        text = text.replace('-', '\\-')
+        text = text.replace('=', '\\=')
+        text = text.replace('|', '\\|')
+        text = text.replace('{', '\\{')
+        text = text.replace('}', '\\}')
+        text = text.replace('.', '\\.')
+        text = text.replace('!', '\\!')
+        
+        return text
         
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Processa mensagens de texto"""
@@ -27,6 +56,11 @@ class MessageHandler:
             chat_id = update.effective_chat.id
             user = update.effective_user
             user_level = context.user_data.get('level', 'B1')
+            
+            # Verificar se está no meio de um teste de nível
+            if 'level_test' in context.user_data:
+                await self._handle_level_test_response(update, context, user_message)
+                return
             
             # Mostrar "typing..."
             await context.bot.send_chat_action(
@@ -49,10 +83,9 @@ class MessageHandler:
                 is_voice=False
             )
             
-            # Enviar resposta em texto
+            # Enviar resposta em texto (sem markdown para evitar erros)
             await update.message.reply_text(
-                response['text'],
-                parse_mode='Markdown'
+                response['text']
             )
             
             # Se o modo incluir voz, gerar e enviar áudio
@@ -115,8 +148,7 @@ class MessageHandler:
             
             # Enviar transcrição
             await update.message.reply_text(
-                f"📝 **I heard:** {transcription}",
-                parse_mode='Markdown'
+                f"📝 **I heard:** {transcription}"
             )
             
             # Processar como texto
@@ -141,8 +173,7 @@ class MessageHandler:
             
             # Enviar resposta em texto
             await update.message.reply_text(
-                response['text'],
-                parse_mode='Markdown'
+                response['text']
             )
             
             # Gerar e enviar áudio da resposta
@@ -175,6 +206,74 @@ class MessageHandler:
                 
         except Exception as e:
             logger.error(f"Erro ao processar voz: {e}")
-            await update.message.reply_text(
-                "❌ Sorry, I couldn't process your voice message. Please try again."
-            )
+            await update.message.reply_text("❌ Sorry, I had trouble processing your voice message. Please try again!")
+    
+    async def _handle_level_test_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_message: str):
+        """Handle responses to level test questions"""
+        test_data = context.user_data['level_test']
+        current_q = test_data['current_question']
+        questions = test_data['questions']
+        
+        # Validate answer format
+        answer = user_message.strip().upper()
+        if answer not in ['A', 'B', 'C', 'D']:
+            await update.message.reply_text("Please reply with just the letter A, B, C, or D! 😊")
+            return
+        
+        # Save answer
+        test_data['answers'].append(answer)
+        test_data['current_question'] += 1
+        
+        # Check if more questions
+        if test_data['current_question'] < len(questions):
+            # Send next question
+            next_q = questions[test_data['current_question']]
+            question_num = test_data['current_question'] + 1
+            
+            test_text = f"""📝 **English Level Test** - Question {question_num}/5
+
+{next_q['question']}
+
+{chr(10).join(next_q['options'])}
+
+Reply with just the letter (A, B, C, or D)"""
+            
+            await update.message.reply_text(test_text)
+        else:
+            # Test completed - evaluate and save level
+            answers = test_data['answers']
+            suggested_level = self.deepseek.evaluate_level_test(answers)
+            
+            # Update user level in database
+            chat_id = update.effective_chat.id
+            username = update.effective_user.username
+            first_name = update.effective_user.first_name
+            last_name = update.effective_user.last_name
+            
+            # Update in context and database
+            context.user_data['level'] = suggested_level
+            
+            # Generate results message
+            correct_count = sum(1 for i, answer in enumerate(answers) 
+                              if i < len(questions) and answer == questions[i]["correct"])
+            
+            results_text = f"""🎯 **Test Results!**
+
+You got **{correct_count}/5** questions correct!
+
+🎓 **Your suggested English level: {suggested_level}**
+
+**What this means:**
+• **A1**: Beginner - Basic words and phrases
+• **A2**: Elementary - Simple conversations
+• **B1**: Intermediate - Everyday situations
+• **B2**: Upper-Intermediate - Complex topics
+• **C1**: Advanced - Sophisticated discussions
+• **C2**: Proficient - Near-native level
+
+I'll adjust my teaching style to match your **{suggested_level}** level! Ready to start practicing? Send me any message! 🚀"""
+            
+            await update.message.reply_text(results_text)
+            
+            # Clear test data
+            del context.user_data['level_test']

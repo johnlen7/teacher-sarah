@@ -1,105 +1,23 @@
-# 🤖 Sarah English Teacher Bot
+# 🤖 Sarah Collins - English Teacher Bot
 
-## 📋 Descrição
-Bot inteligente para ensino de inglês via Telegram, com IA personalizada, teste de nível, correção de gramática e suporte a mensagens de voz.
+A **100% functional and free** English teacher Telegram bot that helps Brazilian students learn English through interactive conversations, voice messages, and personalized feedback.
 
-## ✨ Características Principais
+## 🌟 Features
 
-### � Funcionalidades Core
-- **IA Personalizada**: Sarah 2.0 - professora amigável e contextual
-- **Teste de Nível**: Sistema automático A1-C2 com 5 perguntas
-- **Banco Individual**: Cada usuário tem seu próprio banco de dados
-- **Suporte a Voz**: Transcrição e feedback de pronúncia
-- **Correção Inteligente**: Gramática e sugestões de vocabulário
-- **Memória Contextual**: Lembra conversas e preferências
+### 🌟 Meet Sarah Collins
+- **Young & Energetic**: A 28-year-old English teacher from California, social media savvy
+- **Youth-Focused**: Connects with Gen Z and young adults using modern references
+- **Pop Culture Expert**: References Marvel, K-pop, Netflix, gaming, and current trends
+- **Culturally Aware**: Lived 3 years in Rio/São Paulo, understands Brazilian youth culture
+- **Adaptive Teaching**: Adjusts language complexity based on student level (A1-C2)
+- **Memory-Powered**: Remembers previous conversations for personalized learning journey
 
-### � APIs Integradas
-- **OpenRouter DeepSeek** (Principal): `tngtech/deepseek-r1t2-chimera:free`
-- **GPT4All Local** (Fallback): Servidor local na porta 4891
-- **Whisper**: Transcrição de áudio via API local
-
-### 📊 Comandos Disponíveis
-- `/start` - Mensagem de boas-vindas personalizada
-- `/help` - Guia de uso completo
-- `/level` - Teste de nível de inglês (5 perguntas)
-- `/setlevel [A1-C2]` - Define nível manualmente
-
-## 🏗️ Arquitetura
-
-```
-english-teacher-bot/
-├── 📱 bot/                    # Código principal do bot
-│   ├── services/              # Serviços da aplicação
-│   │   ├── deepseek_service.py      # IA + APIs múltiplas
-│   │   ├── optimized_history_service.py  # Banco otimizado
-│   │   ├── whisper_service.py       # Transcrição de áudio
-│   │   └── tts_service.py          # Text-to-Speech
-│   ├── handlers.py            # Processamento de mensagens
-│   └── main.py               # Entry point do Telegram
-├── 📁 data/                  # Dados do sistema
-│   ├── chats/                # Bancos individuais por usuário
-│   │   ├── chat_123456789/   # Usuário específico
-│   │   │   ├── profile.db    # Perfil + preferências
-│   │   │   ├── conversations.db  # Histórico de mensagens
-│   │   │   └── metadata.json # Estatísticas rápidas
-│   │   └── ...               # Outros usuários
-│   └── backup_old_db         # Backup do sistema anterior
-├── 📚 docs/                  # Documentação
-│   ├── DATABASE_STRUCTURE.md # Arquitetura do banco
-│   ├── INSTALLATION.md       # Guia de instalação
-│   └── README_old.md         # Backup do README anterior
-├── 🧪 tests/                 # Todos os testes
-│   ├── README.md             # Índice de testes
-│   ├── test_optimized_database.py  # Teste do novo banco
-│   ├── test_apis_direct.py         # Teste das APIs
-│   ├── migrate_database.py         # Migração de dados
-│   └── ...                         # Outros testes
-├── 🎤 whisper/               # Serviço de transcrição
-│   └── app.py               # API Flask do Whisper
-└── 📋 logs/                  # Logs do sistema
-```
-
-## 📚 Documentação
-
-### 📖 Guias Principais
-- **[📋 Instalação Completa](docs/INSTALLATION.md)** - Setup passo a passo
-- **[🗄️ Arquitetura do Banco](docs/DATABASE_STRUCTURE.md)** - Sistema otimizado por chat_id  
-- **[🧪 Guia de Testes](tests/README.md)** - Como testar todas as funcionalidades
-
-### 🎯 Links Rápidos
-- **[⚙️ Configuração de APIs](docs/INSTALLATION.md#-configurar-variáveis-de-ambiente)**
-- **[🔧 Troubleshooting](docs/INSTALLATION.md#-troubleshooting)**
-- **[📊 Sistema de Banco Individual](docs/DATABASE_STRUCTURE.md#-como-funciona)**
-
-## 🚀 Início Rápido
-
-### ⚡ Instalação Expressa
-```bash
-# 1. Clonar e instalar
-git clone <repository-url>
-cd english-teacher-bot
-pip install -r requirements.txt
-
-# 2. Configurar .env
-cp .env.example .env
-# Editar .env com TELEGRAM_BOT_TOKEN e OPENROUTER_API_KEY
-
-# 3. Testar configuração
-python tests/test_env.py
-python tests/test_apis_direct.py
-
-# 4. Executar bot
-cd bot && python main.py
-```
-
-### 🔍 Validação do Sistema
-```bash
-# Testar banco de dados otimizado
-python tests/test_optimized_database.py
-
-# Teste completo end-to-end
-python tests/test_final_complete.py
-```
+### 🚀 Core Capabilities
+- 🎤 **Voice Recognition**: Transcribes audio messages using OpenAI Whisper (local)
+- 🧠 **AI Conversations**: Powered by DeepSeek R1 via OpenRouter (free tier) + GPT4All fallback
+- 🗣️ **Text-to-Speech**: Generates natural audio responses with Edge-TTS + recording indicators
+- ✏️ **Grammar Checking**: Real-time corrections using LanguageTool
+- 📚 **Level Adaptation**: Personalizes teaching based on English proficiency
 - 🧠 **Individual Memory**: SQLite database stores conversation history per user
 - 🎯 **Multi-API Fallback**: OpenRouter → GPT4All Local → Smart fallbacks
 - 🔥 **Youth-Focused**: Modern slang, emojis, pop culture references

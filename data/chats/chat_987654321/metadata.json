@@ -1,0 +1,13 @@
+{
+  "chat_id": 987654321,
+  "created_at": "2025-08-05T22:58:33.473044",
+  "last_access": "2025-08-05T22:58:33.824809",
+  "total_sessions": 0,
+  "current_level": "B1",
+  "quick_stats": {
+    "total_messages": 4,
+    "voice_messages": 0,
+    "corrections_made": 1,
+    "topics_discussed": []
+  }
+}
