@@ -57,9 +57,21 @@ class MessageHandler:
             
             # Se o modo incluir voz, gerar e enviar áudio
             if context.user_data.get('mode', 'both') in ['voice', 'both']:
+                # Mostrar que está gravando áudio
+                await context.bot.send_chat_action(
+                    chat_id=chat_id,
+                    action="record_voice"
+                )
+                
+                # Enviar mensagem indicando que está gerando áudio
+                status_message = await update.message.reply_text("🎤 Recording audio response...")
+                
                 # Gerar áudio apenas da parte em inglês
                 english_text = response.get('english_only', response['text'])
                 audio_path = await self.tts.generate_speech(english_text)
+                
+                # Deletar mensagem de status
+                await status_message.delete()
                 
                 if audio_path and os.path.exists(audio_path):
                     with open(audio_path, 'rb') as audio_file:
@@ -134,8 +146,20 @@ class MessageHandler:
             )
             
             # Gerar e enviar áudio da resposta
+            # Mostrar que está gravando áudio
+            await context.bot.send_chat_action(
+                chat_id=update.effective_chat.id,
+                action="record_voice"
+            )
+            
+            # Enviar mensagem indicando que está gerando áudio
+            status_message = await update.message.reply_text("🎤 Recording audio response...")
+            
             english_text = response.get('english_only', response['text'])
             audio_path = await self.tts.generate_speech(english_text)
+            
+            # Deletar mensagem de status
+            await status_message.delete()
             
             if audio_path and os.path.exists(audio_path):
                 with open(audio_path, 'rb') as audio_file:

@@ -8,46 +8,22 @@ logger = logging.getLogger(__name__)
 
 class DeepSeekService:
     def __init__(self, api_key: str = None, history_service: HistoryService = None):
-        """Inicializa o serviço DeepSeek com múltiplas APIs"""
-        
-        # Configuração de APIs
-        self.openrouter_key = api_key or os.getenv("OPENROUTER_API_KEY")
-        self.deepseek_key = os.getenv("DEEPSEEK_API_KEY")
-        self.use_direct_deepseek = os.getenv("USE_DIRECT_DEEPSEEK", "false").lower() == "true"
-        self.use_local_gpt4all = os.getenv("USE_GPT4ALL", "false").lower() == "true"
-        
-        # URLs e configurações
-        self.openrouter_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-        self.openrouter_model = os.getenv("OPENROUTER_MODEL", "tngtech/deepseek-r1t2-chimera:free")
-        self.deepseek_url = "https://api.deepseek.com/v1"
-        self.gpt4all_url = os.getenv("GPT4ALL_URL", "http://localhost:4891")
-        
-        # Headers para OpenRouter com configurações adicionais
-        self.openrouter_headers = {
-            "Authorization": f"Bearer {self.openrouter_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "https://github.com/johnlen7/teacher-sarah"),
-            "X-Title": os.getenv("OPENROUTER_SITE_NAME", "Sarah English Teacher Bot")
-        }
-        
-        # Headers para DeepSeek Direct
-        self.deepseek_headers = {
-            "Authorization": f"Bearer {self.deepseek_key}",
+        """Inicializa o serviço DeepSeek com suporte a GPT4All local"""
+        self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
+        self.base_url = "https://openrouter.ai/api/v1"
+        self.headers = {
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
+        
+        # Configuração GPT4All
+        self.use_local_gpt4all = os.getenv("USE_GPT4ALL", "false").lower() == "true"
+        self.gpt4all_url = os.getenv("GPT4ALL_URL", "http://localhost:4891")
         
         # Serviço de histórico
         self.history = history_service or HistoryService()
         
-        # Determinar qual API usar
-        if self.use_local_gpt4all:
-            primary_api = "GPT4All Local"
-        elif self.use_direct_deepseek and self.deepseek_key:
-            primary_api = "DeepSeek Direct"
-        else:
-            primary_api = "OpenRouter"
-            
-        logger.info(f"DeepSeek initialized. Primary API: {primary_api}")
+        logger.info(f"DeepSeek initialized. Using GPT4All: {self.use_local_gpt4all}")
     
     async def generate_response(
         self,
@@ -89,8 +65,11 @@ class DeepSeekService:
         # Construir mensagem do usuário com correções
         user_content = self._build_user_content(user_message, grammar_errors)
         
-        # Escolher serviço por prioridade
-        response_data = await self._generate_response_with_fallback(system_prompt, user_content)
+        # Escolher serviço (GPT4All local ou OpenRouter)
+        if self.use_local_gpt4all:
+            response_data = await self._generate_with_gpt4all(system_prompt, user_content)
+        else:
+            response_data = await self._generate_with_openrouter(system_prompt, user_content)
         
         if response_data:
             # Salvar resposta da Sarah
@@ -105,33 +84,6 @@ class DeepSeekService:
                 chat_id, 'sarah', fallback['text']
             )
             return fallback
-    
-    async def _generate_response_with_fallback(self, system_prompt: str, user_content: str) -> Dict[str, str]:
-        """Gera resposta tentando APIs em ordem de prioridade"""
-        
-        # Ordem de tentativas
-        if self.use_local_gpt4all:
-            # 1. GPT4All local
-            result = await self._generate_with_gpt4all(system_prompt, user_content)
-            if result:
-                return result
-            logger.warning("GPT4All failed, trying OpenRouter...")
-        
-        if self.use_direct_deepseek and self.deepseek_key:
-            # 2. DeepSeek Direct
-            result = await self._generate_with_deepseek_direct(system_prompt, user_content)
-            if result:
-                return result
-            logger.warning("DeepSeek Direct failed, trying OpenRouter...")
-        
-        # 3. OpenRouter (fallback final)
-        if self.openrouter_key:
-            result = await self._generate_with_openrouter(system_prompt, user_content)
-            if result:
-                return result
-            logger.error("All APIs failed!")
-        
-        return None
     
     async def _generate_with_gpt4all(self, system_prompt: str, user_content: str) -> Dict[str, str]:
         """Gera resposta usando GPT4All local"""
@@ -148,7 +100,7 @@ class DeepSeekService:
                 }
                 
                 async with session.post(
-                    f"{self.gpt4all_url}/v1/chat/completions",
+                    f"{self.gpt4all_url}/chat/completions",
                     headers={"Content-Type": "application/json"},
                     json=payload
                 ) as response:
@@ -164,43 +116,12 @@ class DeepSeekService:
             logger.error(f"GPT4All exception: {e}")
             return None
     
-    async def _generate_with_deepseek_direct(self, system_prompt: str, user_content: str) -> Dict[str, str]:
-        """Gera resposta usando DeepSeek API direta"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                payload = {
-                    "model": "deepseek-chat",
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_content}
-                    ],
-                    "temperature": 0.7,
-                    "max_tokens": 600
-                }
-                
-                async with session.post(
-                    f"{self.deepseek_url}/chat/completions",
-                    headers=self.deepseek_headers,
-                    json=payload
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        response_content = data['choices'][0]['message']['content']
-                        return self._parse_response(response_content, None)
-                    else:
-                        logger.error(f"DeepSeek Direct error: {response.status}")
-                        return None
-                        
-        except Exception as e:
-            logger.error(f"DeepSeek Direct exception: {e}")
-            return None
-    
     async def _generate_with_openrouter(self, system_prompt: str, user_content: str) -> Dict[str, str]:
-        """Gera resposta usando OpenRouter/DeepSeek com novo modelo"""
+        """Gera resposta usando OpenRouter/DeepSeek"""
         try:
             async with aiohttp.ClientSession() as session:
                 payload = {
-                    "model": self.openrouter_model,
+                    "model": "deepseek/deepseek-chat-v3-0324:free",
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_content}
@@ -210,8 +131,8 @@ class DeepSeekService:
                 }
                 
                 async with session.post(
-                    f"{self.openrouter_url}/chat/completions",
-                    headers=self.openrouter_headers,
+                    f"{self.base_url}/chat/completions",
+                    headers=self.headers,
                     json=payload
                 ) as response:
                     if response.status == 200:

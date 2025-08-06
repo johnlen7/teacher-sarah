@@ -4,34 +4,57 @@ A **100% functional and free** English teacher Telegram bot that helps Brazilian
 
 ## 🌟 Features
 
-### � Meet Sarah Collins
-- **Warm & Encouraging**: A 32-year-old English teacher from California
-- **Culturally Aware**: Lived 5 years in São Paulo, understands Brazilian challenges
+### 🌟 Meet Sarah Collins
+- **Young & Energetic**: A 28-year-old English teacher from California, social media savvy
+- **Youth-Focused**: Connects with Gen Z and young adults using modern references
+- **Pop Culture Expert**: References Marvel, K-pop, Netflix, gaming, and current trends
+- **Culturally Aware**: Lived 3 years in Rio/São Paulo, understands Brazilian youth culture
 - **Adaptive Teaching**: Adjusts language complexity based on student level (A1-C2)
-- **Natural Personality**: Conversational, friendly, and supportive responses
+- **Memory-Powered**: Remembers previous conversations for personalized learning journey
 
 ### 🚀 Core Capabilities
-- 🎤 **Voice Recognition**: Transcribes audio messages using OpenAI Whisper
-- 🧠 **AI Conversations**: Powered by DeepSeek via OpenRouter (free tier)
-- 🗣️ **Text-to-Speech**: Generates natural audio responses with Edge-TTS
+- 🎤 **Voice Recognition**: Transcribes audio messages using OpenAI Whisper (local)
+- 🧠 **AI Conversations**: Powered by DeepSeek R1 via OpenRouter (free tier) + GPT4All fallback
+- 🗣️ **Text-to-Speech**: Generates natural audio responses with Edge-TTS + recording indicators
 - ✏️ **Grammar Checking**: Real-time corrections using LanguageTool
 - 📚 **Level Adaptation**: Personalizes teaching based on English proficiency
-- 🎯 **Smart Fallbacks**: Intelligent responses even when AI services are offline
+- 🧠 **Individual Memory**: SQLite database stores conversation history per user
+- 🎯 **Multi-API Fallback**: OpenRouter → GPT4All Local → Smart fallbacks
+- 🔥 **Youth-Focused**: Modern slang, emojis, pop culture references
 
 ### 💬 Available Commands
 - `/start` - Welcome message and bot introduction
 - `/help` - Show available features and usage tips
 - `/level <A1|A2|B1|B2|C1|C2>` - Set your English proficiency level
 
+## 🎉 Recent Updates & Improvements
+
+### ✨ Sarah 2.0 - Youth-Focused Teacher (January 2025)
+- **🔥 Modern Personality**: Updated Sarah to be 28 years old, social media savvy, digital nomad
+- **🎬 Pop Culture Integration**: References Marvel, K-pop, Netflix, gaming, and current trends
+- **💬 Youth Language**: Uses modern slang, emojis, and expressions that resonate with young learners
+- **🧠 Individual Memory System**: SQLite database stores conversation history per user for personalized learning
+- **🎤 Audio Indicators**: Shows "🎤 Recording audio response..." while generating voice messages
+- **🤖 Multi-API Support**: Primary OpenRouter + GPT4All local fallback for 100% uptime
+- **🔧 Updated APIs**: Latest DeepSeek R1 model via OpenRouter with proper headers
+
+### 🎯 Teaching Approach Enhancements
+- **Gaming English**: Special focus on gaming vocabulary and Discord communication
+- **Social Media Integration**: Learning through TikTok trends, Instagram phrases, YouTube content
+- **Cultural Bridges**: Connects English expressions to Brazilian internet culture
+- **Interactive Challenges**: Mini-games and challenges based on student interests
+
 ## 🛠️ Technology Stack
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | **Bot Framework** | python-telegram-bot 20.7 | Telegram API integration |
-| **Speech Recognition** | OpenAI Whisper | Local audio transcription |
-| **AI Responses** | DeepSeek V3 (via OpenRouter) | Conversational AI with free tier |
+| **Speech Recognition** | OpenAI Whisper (local) | Audio transcription |
+| **AI Primary** | DeepSeek R1 (via OpenRouter) | Conversational AI with free tier |
+| **AI Fallback** | GPT4All Local | Offline AI alternative |
 | **Text-to-Speech** | Edge-TTS 6.1.10 | Natural voice synthesis |
 | **Grammar Check** | LanguageTool 2.8.1 | Portuguese/English corrections |
+| **Memory System** | SQLite Database | Individual user conversation history |
 | **Containerization** | Docker & Docker Compose | Easy deployment |
 
 ## 🔧 Installation & Setup
@@ -89,13 +112,14 @@ docker-compose logs -f bot
 
 ### Text Conversations
 ```
-Student: "Como digo 'estou com fome' em inglês?"
-Sarah: "Hey there! 😊 To say 'estou com fome' in English, you say: **I'm hungry** or **I am hungry**."
+Student: "Hey Sarah! I love Marvel movies and K-pop!"
+Sarah: "OMG Lucas! � Marvel + K-pop = perfect English practice combo! Let's use Iron Man quotes to learn idioms! Who's your ultimate bias? 😍"
 ```
 
-### Voice Messages
-- Send audio → Bot transcribes → Sarah responds with pronunciation tips
+### Voice Messages & Audio Feedback
+- Send audio → Bot shows "🎤 Recording audio response..." → Sarah responds with pronunciation tips
 - Receive audio responses for natural listening practice
+- Real-time transcription display
 
 ### Level Adaptation
 ```
@@ -159,6 +183,9 @@ docker-compose up -d
 |----------|-------------|----------|
 | `TELEGRAM_BOT_TOKEN` | Your Telegram bot token | ✅ |
 | `OPENROUTER_API_KEY` | OpenRouter API key for DeepSeek | ✅ |
+| `OPENROUTER_MODEL` | Model to use (default: tngtech/deepseek-r1t2-chimera:free) | ❌ |
+| `USE_GPT4ALL` | Enable local GPT4All fallback (true/false) | ❌ |
+| `GPT4ALL_URL` | GPT4All server URL (default: http://localhost:4891) | ❌ |
 | `LOG_LEVEL` | Logging level (INFO, DEBUG, ERROR) | ❌ |
 
 ### Teaching Levels

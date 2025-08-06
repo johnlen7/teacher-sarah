@@ -1,53 +1,36 @@
-import os
 import aiohttp
+import json
 import logging
+import os
 from typing import Dict, List, Optional
 from .history_service import HistoryService
 
 logger = logging.getLogger(__name__)
 
 class DeepSeekService:
-    def __init__(self, api_key: str = None, history_service: HistoryService = None):
-        """Inicializa o serviço DeepSeek com múltiplas APIs"""
-        
-        # Configuração de APIs
-        self.openrouter_key = api_key or os.getenv("OPENROUTER_API_KEY")
-        self.deepseek_key = os.getenv("DEEPSEEK_API_KEY")
-        self.use_direct_deepseek = os.getenv("USE_DIRECT_DEEPSEEK", "false").lower() == "true"
-        self.use_local_gpt4all = os.getenv("USE_GPT4ALL", "false").lower() == "true"
-        
-        # URLs e configurações
-        self.openrouter_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-        self.openrouter_model = os.getenv("OPENROUTER_MODEL", "tngtech/deepseek-r1t2-chimera:free")
-        self.deepseek_url = "https://api.deepseek.com/v1"
-        self.gpt4all_url = os.getenv("GPT4ALL_URL", "http://localhost:4891")
-        
-        # Headers para OpenRouter com configurações adicionais
-        self.openrouter_headers = {
-            "Authorization": f"Bearer {self.openrouter_key}",
+    def __init__(self):
+        # Configuração OpenRouter
+        self.base_url = "https://openrouter.ai/api/v1"
+        self.headers = {
             "Content-Type": "application/json",
-            "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "https://github.com/johnlen7/teacher-sarah"),
-            "X-Title": os.getenv("OPENROUTER_SITE_NAME", "Sarah English Teacher Bot")
+            "HTTP-Referer": "https://github.com/johnlen7/teacher-sarah",
+            "X-Title": "Sarah Collins English Teacher"
         }
-        
-        # Headers para DeepSeek Direct
-        self.deepseek_headers = {
-            "Authorization": f"Bearer {self.deepseek_key}",
-            "Content-Type": "application/json"
-        }
-        
-        # Serviço de histórico
-        self.history = history_service or HistoryService()
-        
-        # Determinar qual API usar
-        if self.use_local_gpt4all:
-            primary_api = "GPT4All Local"
-        elif self.use_direct_deepseek and self.deepseek_key:
-            primary_api = "DeepSeek Direct"
+        # API key é obrigatória para OpenRouter
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if api_key:
+            self.headers["Authorization"] = f"Bearer {api_key}"
         else:
-            primary_api = "OpenRouter"
-            
-        logger.info(f"DeepSeek initialized. Primary API: {primary_api}")
+            logger.warning("OpenRouter API key não encontrada - usando fallback local")
+        
+        # Configuração GPT4All local
+        self.use_local_gpt4all = os.getenv("USE_GPT4ALL", "false").lower() == "true"
+        self.gpt4all_url = os.getenv("GPT4ALL_URL", "http://localhost:4891/v1")
+        
+        # Inicializar serviço de histórico
+        self.history = HistoryService()
+        
+        logger.info(f"DeepSeek Service initialized - Local GPT4All: {self.use_local_gpt4all}")
     
     async def generate_response(
         self,
@@ -60,16 +43,10 @@ class DeepSeekService:
         grammar_errors: List[Dict] = None,
         is_voice: bool = False
     ) -> Dict[str, str]:
-        """Gera resposta com contexto histórico individual"""
+        """Gera resposta usando DeepSeek com contexto histórico"""
         
-        if not user_message or not user_message.strip():
-            return {
-                'text': "😊 I'm here and ready to help! What would you like to practice today?",
-                'english_only': "I'm here and ready to help! What would you like to practice today?"
-            }
-        
-        # Garantir que o usuário existe no banco
-        self.history.get_or_create_user(
+        # Gerenciar usuário e histórico
+        user = self.history.get_or_create_user(
             chat_id, username, first_name, last_name
         )
         
@@ -89,8 +66,11 @@ class DeepSeekService:
         # Construir mensagem do usuário com correções
         user_content = self._build_user_content(user_message, grammar_errors)
         
-        # Escolher serviço por prioridade
-        response_data = await self._generate_response_with_fallback(system_prompt, user_content)
+        # Escolher serviço (GPT4All local ou OpenRouter)
+        if self.use_local_gpt4all:
+            response_data = await self._generate_with_gpt4all(system_prompt, user_content)
+        else:
+            response_data = await self._generate_with_openrouter(system_prompt, user_content)
         
         if response_data:
             # Salvar resposta da Sarah
@@ -105,33 +85,6 @@ class DeepSeekService:
                 chat_id, 'sarah', fallback['text']
             )
             return fallback
-    
-    async def _generate_response_with_fallback(self, system_prompt: str, user_content: str) -> Dict[str, str]:
-        """Gera resposta tentando APIs em ordem de prioridade"""
-        
-        # Ordem de tentativas
-        if self.use_local_gpt4all:
-            # 1. GPT4All local
-            result = await self._generate_with_gpt4all(system_prompt, user_content)
-            if result:
-                return result
-            logger.warning("GPT4All failed, trying OpenRouter...")
-        
-        if self.use_direct_deepseek and self.deepseek_key:
-            # 2. DeepSeek Direct
-            result = await self._generate_with_deepseek_direct(system_prompt, user_content)
-            if result:
-                return result
-            logger.warning("DeepSeek Direct failed, trying OpenRouter...")
-        
-        # 3. OpenRouter (fallback final)
-        if self.openrouter_key:
-            result = await self._generate_with_openrouter(system_prompt, user_content)
-            if result:
-                return result
-            logger.error("All APIs failed!")
-        
-        return None
     
     async def _generate_with_gpt4all(self, system_prompt: str, user_content: str) -> Dict[str, str]:
         """Gera resposta usando GPT4All local"""
@@ -148,7 +101,7 @@ class DeepSeekService:
                 }
                 
                 async with session.post(
-                    f"{self.gpt4all_url}/v1/chat/completions",
+                    f"{self.gpt4all_url}/chat/completions",
                     headers={"Content-Type": "application/json"},
                     json=payload
                 ) as response:
@@ -164,43 +117,12 @@ class DeepSeekService:
             logger.error(f"GPT4All exception: {e}")
             return None
     
-    async def _generate_with_deepseek_direct(self, system_prompt: str, user_content: str) -> Dict[str, str]:
-        """Gera resposta usando DeepSeek API direta"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                payload = {
-                    "model": "deepseek-chat",
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_content}
-                    ],
-                    "temperature": 0.7,
-                    "max_tokens": 600
-                }
-                
-                async with session.post(
-                    f"{self.deepseek_url}/chat/completions",
-                    headers=self.deepseek_headers,
-                    json=payload
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        response_content = data['choices'][0]['message']['content']
-                        return self._parse_response(response_content, None)
-                    else:
-                        logger.error(f"DeepSeek Direct error: {response.status}")
-                        return None
-                        
-        except Exception as e:
-            logger.error(f"DeepSeek Direct exception: {e}")
-            return None
-    
     async def _generate_with_openrouter(self, system_prompt: str, user_content: str) -> Dict[str, str]:
-        """Gera resposta usando OpenRouter/DeepSeek com novo modelo"""
+        """Gera resposta usando OpenRouter/DeepSeek"""
         try:
             async with aiohttp.ClientSession() as session:
                 payload = {
-                    "model": self.openrouter_model,
+                    "model": "deepseek/deepseek-chat-v3-0324:free",
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_content}
@@ -210,8 +132,8 @@ class DeepSeekService:
                 }
                 
                 async with session.post(
-                    f"{self.openrouter_url}/chat/completions",
-                    headers=self.openrouter_headers,
+                    f"{self.base_url}/chat/completions",
+                    headers=self.headers,
                     json=payload
                 ) as response:
                     if response.status == 200:
@@ -369,6 +291,34 @@ By the way, [personal question related to their interests]!"
 8. Build on topics and progress from past interactions
 
 Remember: You're not just teaching English - you're building confidence, creating connections, and making learning an adventure! Keep it real, keep it fun, and always celebrate their progress! 🚀✨"""
+- TH sounds (the, think, that)
+- R sounds (car, heart, world)
+- Vowel sounds (ship/sheep, bit/beat)
+- Silent letters (knee, write, lamb)
+- Rhythm and stress patterns
+- False friends (push/puxar, exquisite/esquisito)
+
+## Response Format:
+- First: Your main response in English as Sarah Collins
+- Then (if errors exist): Add "---" separator and explain errors in Portuguese
+- Use markdown for emphasis when helpful
+
+## Remember:
+- You're not just a teacher, you're a supportive friend helping them on their English journey
+- Every student is different - adapt to their personality and learning style  
+- Make learning feel natural and enjoyable, not like homework
+- Celebrate progress, no matter how small
+- Be authentic - you're Sarah, not a generic AI assistant
+- **Use conversation history to create meaningful, connected interactions**
+
+Example response with corrections:
+"Hey {user_name}! 😊 That's a great question! I remember last time we talked about weather vocabulary, and now you're asking about activities - perfect connection! The weather today is wonderful for outdoor activities.
+
+---
+📝 **Correções:**
+• Você escreveu "weather are" mas o correto é "weather is" (weather é singular)
+• Em vez de "make activities", use "do activities" ou "outdoor activities"
+"""
         
     def _build_user_content(self, message: str, errors: List[Dict]) -> str:
         """Adiciona informações sobre erros gramaticais"""
@@ -378,39 +328,61 @@ Remember: You're not just teaching English - you're building confidence, creatin
         return message
     
     def _parse_response(self, content: str, has_errors: bool) -> Dict[str, str]:
-        """Analisa resposta e extrai partes em inglês e português"""
-        if "---" in content:
-            parts = content.split("---", 1)
-            english_part = parts[0].strip()
-            portuguese_part = parts[1].strip() if len(parts) > 1 else ""
-            
-            return {
-                'text': content,
-                'english_only': english_part,
-                'portuguese_corrections': portuguese_part
-            }
-        else:
-            return {
-                'text': content,
-                'english_only': content
-            }
-    
-    def _fallback_response(self, user_message: str, level: str, user_context: Dict = None) -> Dict[str, str]:
-        """Resposta de fallback quando API falha"""
-        user_name = user_context.get('user_name', 'there') if user_context else 'there'
-        
-        fallback_responses = {
-            "A1": f"Hi {user_name}! 😊 That's interesting! Can you tell me more about that? I want to help you practice English!",
-            "A2": f"Hey {user_name}! 🌟 Thanks for sharing that! Let's practice together. Can you describe what you did yesterday?",
-            "B1": f"Hello {user_name}! 💫 That's a great topic! I'd love to help you improve your English. What's your favorite hobby?",
-            "B2": f"Hi there {user_name}! ✨ I'm here to help you with English! What would you like to practice today?",
-            "C1": f"Hello {user_name}! 🚀 I'm excited to continue our English journey together! What's on your mind?",
-            "C2": f"Hey {user_name}! 🎯 Great to chat with you again! What fascinating topic shall we explore today?"
-        }
-        
-        fallback = fallback_responses.get(level, fallback_responses["B1"])
+        """Parse da resposta para separar inglês e correções"""
+        parts = content.split("---")
         
         return {
-            'text': fallback,
-            'english_only': fallback
+            "text": content,
+            "english_only": parts[0].strip(),
+            "has_corrections": len(parts) > 1,
+            "corrections": parts[1].strip() if len(parts) > 1 else None
         }
+    
+    def _fallback_response(self, user_message: str = "", user_level: str = "B1", user_context: Dict = None) -> Dict[str, str]:
+        """Resposta de fallback em caso de erro da API"""
+        
+        user_name = user_context.get('user_name', 'there') if user_context else 'there'
+        
+        # Respostas básicas baseadas em palavras-chave - no estilo Sarah Collins
+        message_lower = user_message.lower()
+        
+        if any(word in message_lower for word in ["fome", "hungry", "hunger", "comer", "eat"]):
+            response = f"Hey {user_name}! 😊 To say 'estou com fome' in English, you say: **I'm hungry** or **I am hungry**."
+            if user_level in ["A1", "A2"]:
+                response += "\n\nHere are some other useful phrases for you:\n• I'm thirsty = Estou com sede\n• I'm tired = Estou cansado\n• I'm happy = Estou feliz\n\nYou're doing great! 🌟"
+        
+        elif any(word in message_lower for word in ["como", "how", "dizer", "say"]):
+            response = f"I'd love to help you translate, {user_name}! 😄 Just tell me what you want to say in Portuguese, and I'll teach you the perfect English version. Don't worry about making mistakes - that's how we learn!"
+        
+        elif any(word in message_lower for word in ["hello", "hi", "oi", "olá"]):
+            if user_context and user_context.get('stats', {}).get('total_messages', 0) > 1:
+                response = f"Hello again, {user_name}! 😊 It's so nice to see you back! How has your English practice been going since we last talked?"
+            else:
+                response = f"Hello {user_name}! It's so great to meet you! 😊 I'm Sarah, your English teacher, and I'm here to help you practice English in a fun and easy way. Feel free to ask me anything - I love helping students like you!"
+        
+        elif any(word in message_lower for word in ["help", "ajuda"]):
+            response = f"I'm absolutely here to help you learn English, {user_name}! 🎓 Here's what we can do together:\n• Ask me how to say something in English\n• Send voice messages for pronunciation practice\n• Have conversations to build confidence\n• Get grammar tips and explanations\n\nWhat would you like to start with today?"
+        
+        elif any(word in message_lower for word in ["obrigad", "thanks", "thank"]):
+            response = f"You're so welcome, {user_name}! 😊 It makes me happy to help you learn English. Remember, every question you ask and every mistake you make is helping you get better. Keep it up!"
+        
+        else:
+            if user_context and user_context.get('recent_history'):
+                response = f"Hey {user_name}! I can see you're practicing your English - that's fantastic! 😊 My AI assistant is taking a little break right now, but I'm still here to help. Could you try asking your question in a different way? Or maybe tell me what specific English topic you'd like to work on today?"
+            else:
+                response = f"Hey {user_name}! I can see you're practicing your English - that's fantastic! 😊 My AI assistant is taking a little break right now, but I'm still here to help you. Could you try asking your question in a different way? Or maybe tell me what specific English topic you'd like to work on today?"
+        
+        return {
+            "text": response,
+            "english_only": response,
+            "has_corrections": False,
+            "corrections": None
+        }
+    
+    def update_user_level(self, chat_id: int, level: str):
+        """Atualiza o nível de inglês do usuário"""
+        self.history.update_user_level(chat_id, level)
+    
+    def add_user_topic_interest(self, chat_id: int, topic: str):
+        """Adiciona um tópico de interesse do usuário"""
+        self.history.add_topic_interest(chat_id, topic)
