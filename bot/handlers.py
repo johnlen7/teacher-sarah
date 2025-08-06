@@ -5,7 +5,7 @@ import re
 from typing import Optional
 from telegram import Update
 from telegram.ext import ContextTypes
-from services import (
+from bot.services import (
     WhisperService,
     DeepSeekService,
     TTSService,

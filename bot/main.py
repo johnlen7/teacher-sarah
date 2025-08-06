@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -8,10 +9,101 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bot.handlers import MessageHandler as CustomHandler
+from bot.services.async_message_queue import message_queue
+
+# Configurar logging para multitarefas
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - [%(levelname)s] - Chat:%(chat_id)s - %(message)s',
+    handlers=[
+        logging.FileHandler('bot_multitask.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Carregar variáveis de ambiente do diretório pai
 env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(env_path)
+
+class AsyncCustomHandler:
+    """Handler que usa sistema de filas assíncronas para multitarefas"""
+    
+    def __init__(self):
+        self.message_handler = CustomHandler()
+    
+    async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handler assíncrono para mensagens de texto"""
+        chat_id = update.effective_chat.id
+        user_id = update.effective_user.id
+        message_text = update.message.text
+        
+        # Log da mensagem recebida
+        logger.info(f"Mensagem recebida - Chat: {chat_id}, User: {user_id}, Text: {message_text[:50]}...")
+        
+        # Adicionar à fila assíncrona
+        task_id = await message_queue.add_message(
+            chat_id=chat_id,
+            user_id=user_id,
+            message_type='text',
+            content=message_text,
+            update=update,
+            context=context,
+            handler_func=self._process_text_message,
+            priority=1  # Alta prioridade para mensagens de texto
+        )
+        
+        logger.info(f"Task criada - Chat: {chat_id}, Task ID: {task_id}")
+        # Enviar confirmação imediata (opcional - mostra que recebeu)
+        # await update.message.reply_text("✨ Processing your message...")
+    
+    async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handler assíncrono para mensagens de voz"""
+        chat_id = update.effective_chat.id
+        user_id = update.effective_user.id
+        
+        # Log da mensagem de voz recebida
+        logger.info(f"Mensagem de voz recebida - Chat: {chat_id}, User: {user_id}")
+        
+        # Adicionar à fila assíncrona
+        task_id = await message_queue.add_message(
+            chat_id=chat_id,
+            user_id=user_id,
+            message_type='voice',
+            content='[voice_message]',
+            update=update,
+            context=context,
+            handler_func=self._process_voice_message,
+            priority=2  # Prioridade normal para voz (demora mais)
+        )
+        
+        logger.info(f"Task de voz criada - Chat: {chat_id}, Task ID: {task_id}")
+        
+        # Mostrar que está processando
+        await context.bot.send_chat_action(
+            chat_id=chat_id,
+            action="typing"
+        )
+    
+    async def _process_text_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Processa mensagem de texto usando o handler original"""
+        try:
+            # Verificar se é resposta de teste de nível
+            if 'level_test' in context.user_data:
+                await self.message_handler._handle_level_test_response(update, context, update.message.text)
+            else:
+                await self.message_handler.handle_text(update, context)
+        except Exception as e:
+            logger.error(f"Erro ao processar mensagem de texto: {e}")
+            await update.message.reply_text("❌ Sorry, I encountered an error. Please try again.")
+    
+    async def _process_voice_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Processa mensagem de voz usando o handler original"""
+        try:
+            await self.message_handler.handle_voice(update, context)
+        except Exception as e:
+            logger.error(f"Erro ao processar mensagem de voz: {e}")
+            await update.message.reply_text("❌ Sorry, I had trouble processing your voice message. Please try again!")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando /start"""
@@ -120,32 +212,66 @@ async def set_level(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"• B2: Upper-Intermediate\n• C1: Advanced\n• C2: Proficient"
         )
 
+async def queue_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando para verificar status da fila de processamento"""
+    status = message_queue.get_queue_status()
+    
+    status_text = f"""🔄 **Queue Status**
+
+🎯 **Active Processing:**
+• Chats being processed: {status['active_chats']}
+• Total queued messages: {status['total_queued_messages']}
+• Max concurrent tasks: {status['max_concurrent_tasks']}
+
+📊 **Chat Queues:**"""
+    
+    if status['chat_queues']:
+        for chat_id, queue_size in status['chat_queues'].items():
+            status_text += f"\n• Chat {chat_id}: {queue_size} messages"
+    else:
+        status_text += "\n• All queues empty ✅"
+    
+    if status['processing_chats']:
+        status_text += f"\n\n🔄 **Currently Processing:** {', '.join(map(str, status['processing_chats']))}"
+    
+    await update.message.reply_text(status_text)
+
 def main():
     """Função principal"""
     # Criar aplicação
     application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).build()
     
-    # Instanciar handler customizado
-    custom_handler = CustomHandler()
+    # Instanciar handler assíncrono customizado
+    async_handler = AsyncCustomHandler()
     
     # Adicionar handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("level", level_test_command))
     application.add_handler(CommandHandler("setlevel", set_level))
+    application.add_handler(CommandHandler("status", queue_status))
     
-    # Handler para mensagens de texto
+    # Handler para mensagens de texto (usando fila assíncrona)
     application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, custom_handler.handle_text)
+        MessageHandler(filters.TEXT & ~filters.COMMAND, async_handler.handle_text)
     )
     
-    # Handler para mensagens de voz
+    # Handler para mensagens de voz (usando fila assíncrona)
     application.add_handler(
-        MessageHandler(filters.VOICE, custom_handler.handle_voice)
+        MessageHandler(filters.VOICE, async_handler.handle_voice)
     )
+    
+    # Adicionar handler de shutdown gracioso
+    async def shutdown_handler():
+        """Encerra o sistema de filas graciosamente"""
+        await message_queue.shutdown()
+    
+    # Registrar shutdown handler
+    application.add_handler(CommandHandler("shutdown", shutdown_handler))
     
     # Iniciar bot
-    print("Bot iniciado! Aguardando mensagens...")
+    print("🚀 Sarah English Teacher Bot iniciado com sistema multitarefa!")
+    print("📊 Processamento assíncrono ativo - múltiplas conversas simultâneas")
     application.run_polling()
 
 if __name__ == '__main__':
