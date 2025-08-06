@@ -308,16 +308,6 @@ Seu bot já está configurado com:
 - **Token**: `8029287411:AAEyQ7WPgh0l9obK-U48aXE3DJ-ZLIW58to`
 - **OpenRouter Key**: Configurada para 1000 req/dia
 
-## 🔧 Variáveis de Ambiente
-
-```env
-TELEGRAM_BOT_TOKEN=8029287411:AAEyQ7WPgh0l9obK-U48aXE3DJ-ZLIW58to
-OPENROUTER_API_KEY=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
-WHISPER_MODEL=base
-TTS_VOICE=en-US-JennyNeural
-LOG_LEVEL=INFO
-```
-
 ## 💡 Como Usar
 
 1. **Iniciar o bot**:
