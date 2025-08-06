@@ -23,17 +23,41 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def set_level(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Define o nível do aluno"""
+    from handlers import MessageHandler
+    
     if context.args:
         level = context.args[0].upper()
         valid_levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
         
         if level in valid_levels:
+            # Atualizar no contexto local
             context.user_data['level'] = level
-            await update.message.reply_text(f"Level set to {level}.")
+            
+            # Atualizar no banco de dados
+            handler = MessageHandler()
+            handler.deepseek.update_user_level(update.effective_chat.id, level)
+            
+            await update.message.reply_text(
+                f"Perfect! ✅ Your English level has been updated to **{level}**. "
+                f"I'll adjust my teaching style accordingly! 😊",
+                parse_mode='Markdown'
+            )
         else:
-            await update.message.reply_text("Invalid level. Use one of: A1, A2, B1, B2, C1, C2.")
+            await update.message.reply_text(
+                "Invalid level. Please use one of: **A1, A2, B1, B2, C1, C2**.\n\n"
+                "• A1/A2: Beginner\n• B1/B2: Intermediate\n• C1/C2: Advanced",
+                parse_mode='Markdown'
+            )
     else:
-        await update.message.reply_text("Use /level [A1-C2] to set your English level.")
+        current_level = context.user_data.get('level', 'B1')
+        await update.message.reply_text(
+            f"Your current level is **{current_level}**.\n\n"
+            f"Use `/level [A1-C2]` to change it.\n\n"
+            f"**Levels:**\n"
+            f"• A1: Beginner\n• A2: Elementary\n• B1: Intermediate\n"
+            f"• B2: Upper-Intermediate\n• C1: Advanced\n• C2: Proficient",
+            parse_mode='Markdown'
+        )
 
 def main():
     """Função principal"""

@@ -24,23 +24,29 @@ class MessageHandler:
         """Processa mensagens de texto"""
         try:
             user_message = update.message.text
-            user_id = update.effective_user.id
+            chat_id = update.effective_chat.id
+            user = update.effective_user
             user_level = context.user_data.get('level', 'B1')
             
             # Mostrar "typing..."
             await context.bot.send_chat_action(
-                chat_id=update.effective_chat.id,
+                chat_id=chat_id,
                 action="typing"
             )
             
             # Verificar gramática
             grammar_errors = self.grammar.check(user_message)
             
-            # Gerar resposta com DeepSeek
+            # Gerar resposta com DeepSeek incluindo contexto histórico
             response = await self.deepseek.generate_response(
                 user_message=user_message,
+                chat_id=chat_id,
+                username=user.username,
+                first_name=user.first_name,
+                last_name=user.last_name,
                 user_level=user_level,
-                grammar_errors=grammar_errors
+                grammar_errors=grammar_errors,
+                is_voice=False
             )
             
             # Enviar resposta em texto
@@ -102,14 +108,20 @@ class MessageHandler:
             )
             
             # Processar como texto
+            chat_id = update.effective_chat.id
+            user = update.effective_user
             user_level = context.user_data.get('level', 'B1')
             
             # Verificar gramática
             grammar_errors = self.grammar.check(transcription)
             
-            # Gerar resposta
+            # Gerar resposta com contexto histórico
             response = await self.deepseek.generate_response(
                 user_message=transcription,
+                chat_id=chat_id,
+                username=user.username,
+                first_name=user.first_name,
+                last_name=user.last_name,
                 user_level=user_level,
                 grammar_errors=grammar_errors,
                 is_voice=True
